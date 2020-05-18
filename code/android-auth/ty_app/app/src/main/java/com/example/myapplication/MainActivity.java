@@ -1,24 +1,39 @@
 package com.example.myapplication;
 
-import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.Toast;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.facebook.AccessToken;
+import com.facebook.AccessTokenTracker;
+import com.facebook.CallbackManager;
+import com.facebook.GraphRequest;
+import com.facebook.GraphResponse;
+import com.facebook.login.widget.LoginButton;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.SignInButton;
-import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.tasks.Task;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -26,10 +41,30 @@ public class MainActivity extends AppCompatActivity {
     String TAG= MainActivity.class.getSimpleName();
     GoogleSignInClient googleSignInClient;
     private SignInButton googleSignInButton;
+    private LoginButton loginButton;
+    private CallbackManager callbackManager;
+    private AccessTokenTracker accessTokenTracker;
+    private TextView displayName, emailID;
+    private ImageView displayImage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+       /* try {
+            PackageInfo info = getPackageManager().getPackageInfo(
+                    "com.example.myapplication",
+                    PackageManager.GET_SIGNATURES);
+            for (Signature signature : info.signatures) {
+                MessageDigest md = MessageDigest.getInstance("SHA");
+                md.update(signature.toByteArray());
+                System.out.println("KeyHash:" + Base64.encodeToString(md.digest(), Base64.DEFAULT));
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+
+        } catch (NoSuchAlgorithmException e) {
+
+        }*/
         setContentView(R.layout.activity_main);
 
         googleSignInButton = findViewById(R.id.sign_in_button);
@@ -46,6 +81,29 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(signInIntent, 101);
             }
         });
+
+        displayName = findViewById(R.id.display_name);
+        emailID = findViewById(R.id.email);
+        displayImage = findViewById(R.id.image_view);
+
+        loginButton = findViewById(R.id.login_button);
+        loginButton.setReadPermissions(Arrays.asList("email", "public_profile"));
+
+        // Creating CallbackManager
+        callbackManager = CallbackManager.Factory.create();
+        accessTokenTracker = new AccessTokenTracker() {
+            @Override
+            protected void onCurrentAccessTokenChanged(AccessToken oldAccessToken, AccessToken currentAccessToken) {
+                // currentAccessToken is null if the user is logged out
+                if (currentAccessToken != null) {
+                    // AccessToken is not null implies user is logged in and hence we sen the GraphRequest
+                    useLoginInformation(currentAccessToken);
+                }else{
+                    displayName.setText("Not Logged In");
+                }
+            }
+        };
+
     }
 
     @Override
@@ -83,8 +141,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        callbackManager.onActivityResult(requestCode, resultCode, data);
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == Activity.RESULT_OK)
+        /*if (resultCode == Activity.RESULT_OK)
             switch (requestCode) {
                 case 101:
                     try {
@@ -94,22 +153,66 @@ public class MainActivity extends AppCompatActivity {
                         GoogleSignInAccount account = task.getResult(ApiException.class);
                         String idToken = account.getIdToken();
                         onLoggedIn(account);
-                    /*
+                    *//*
                      Write to the logic send this id token to server using HTTPS
-                     */
+                     *//*
                     } catch (ApiException e) {
                         // The ApiException status code indicates the detailed failure reason.
                         Log.w(TAG, "signInResult:failed code=" + e.getStatusCode());
                     }
                     break;
+            }*/
+    }
+
+    private void useLoginInformation(AccessToken accessToken) {
+
+        /**
+         Creating the GraphRequest to fetch user details
+         1st Param - AccessToken
+         2nd Param - Callback (which will be invoked once the request is successful)
+         **/
+        GraphRequest request = GraphRequest.newMeRequest(accessToken, new GraphRequest.GraphJSONObjectCallback() {
+            //OnCompleted is invoked once the GraphRequest is successful
+            @Override
+            public void onCompleted(JSONObject object, GraphResponse response) {
+                try {
+                    if(object != null) {
+                        System.out.println("object is "+object.toString());
+                        String name = object.getString("name");
+                        String email = object.getString("email");
+                        String image = object.getJSONObject("picture").getJSONObject("data").getString("url");
+                        System.out.println("name is "+name +"email is "+email);
+                        displayName.setText(name);
+                        emailID.setText(email);
+                    }
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
             }
+        });
+
+        // We set parameters to the GraphRequest using a Bundle.
+        Bundle parameters = new Bundle();
+        parameters.putString("fields", "id,name,email,picture.width(200)");
+        request.setParameters(parameters);
+        // Initiate the GraphRequest
+        request.executeAsync();
+    }
+
+    public void onDestroy() {
+        super.onDestroy();
+        // We stop the tracking before destroying the activity
+        accessTokenTracker.stopTracking();
     }
 
     @Override
     public void onStart() {
         super.onStart();
 
-        GoogleSignInAccount alreadyloggedAccount = GoogleSignIn.getLastSignedInAccount(this);
+        System.out.println("application started");
+
+       /* GoogleSignInAccount alreadyloggedAccount = GoogleSignIn.getLastSignedInAccount(this);
         if (alreadyloggedAccount != null) {
             Log.d(TAG, "logged in");
             Toast.makeText(this, "Already Logged In", Toast.LENGTH_SHORT).show();
@@ -117,6 +220,10 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Log.d(TAG, "Not logged in");
         }
+*/
+        accessTokenTracker.startTracking();
+        AccessToken accessToken = AccessToken.getCurrentAccessToken();
+        useLoginInformation(accessToken);
     }
 
     private void onLoggedIn(GoogleSignInAccount googleSignInAccount) {

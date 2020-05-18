@@ -12,4 +12,6 @@
     <string name="edit_message">Enter a message</string>
     <string name="title_activity_profile">ProfileActivity</string>
     <string name="web_client_id">935322342223-v3ecsdgk2oacifgqbv1ltoo6d60thitc.apps.googleusercontent.com</string>
+    <string name="facebook_app_id">534049507260190</string>
+    <string name="fb_login_protocol_scheme">fb534049507260190</string>
 </resources>
